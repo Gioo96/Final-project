@@ -33,62 +33,70 @@ Detection::Detection(String pattern) {
     }
 }
 
-void Detection::pyramid(double scale, Mat image, int stepSize, int windowSize) {
+void Detection::pyramid(double scale, Mat image, int stepSize, int windowSize_rows, int windowSize_cols, String model_path_pb) {
     
-    int debug = 0;
+    int tot_num_boats = 0; // Total number of detected boats
 
-    int c = 0;
-    int im_c = 0;
-    while (image.rows >= windowSize && image.cols >= windowSize) {
+    Mat clustered_image = image.clone();
+    Mat total_rects = image.clone();
+    
+    vector<int> probabilities;
+    vector<Rect> boat_rects;
+
+    vector<Rect> rects;
+    while (image.rows >= windowSize_rows && image.cols >= windowSize_cols) {
         
         // Sliding window
         int i = 0; // row
-        while (i <= image.rows - windowSize) {
+        while (i <= image.rows - windowSize_rows) {
             
-            for (int j = 0; j <= image.cols - windowSize; j += stepSize) {
-                
-                String model_path_pb = "/Users/gioel/Documents/Control\ System\ Engineering/Computer\ Vision/Final\ Project/Model/boat_class.pb";
-                Rect rect(j, i, windowSize, windowSize);
+            for (int j = 0; j <= image.cols - windowSize_cols; j += stepSize) { // col
+    
+                Rect rect(j, i, windowSize_cols, windowSize_rows);
                 Mat draw_window = image.clone();
                 Mat window = draw_window(rect);
-//                if (j == 0) {
-//
-//                    imshow("okk", aa);
-//                    waitKey(0);
-//                }
             
-                //Mat img_toNet = Mat(draw_window,rect); // Img to give to Net
+                // Resize window (it has to be 300x300 since CNN was trained with images with such sizes)
                 resize(window, window, Size(300, 300));
+                // Load CNN model
                 dnn::Net net = dnn::readNetFromTensorflow(model_path_pb);
                 Mat img_toNet_blob = cv::dnn::blobFromImage(window);
                 net.setInput(img_toNet_blob);
-                Mat res;
-                net.forward(res);
-                cout<<res<<endl;
+                Mat prob;
+                net.forward(prob);
+                cout<<"Probability: "<<prob<<endl;
                 
-                if (round(res.at<float>(0)) == 1) {
+                if (prob.at<float>(0) >= 0.8) {
 
                     imshow("Boat", window);
                     waitKey(1);
-                    rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 1);
+                    rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 3);
+                    probabilities.push_back(round(prob.at<float>(0)));
+                    // Save sub-images detected as boats into rects, rect_cluster
+                    //rect_cluster_08.push_back(rect);
+                    rects.push_back(rect);
+                    //
+                    tot_num_boats ++;
+                    imshow("RECT", window);
+                    waitKey(0);
                 }
                 
-                if (round(res.at<float>(0)) == 0) {
+                else {
 
                     imshow("No Boat", window);
                     waitKey(1);
-                    rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 1);
+                    rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 3);
+                    probabilities.push_back(round(prob.at<float>(0)));
+                    if (round(prob.at<float>(0)) == 1) {
+                        
+                        boat_rects.push_back(rect);
+                    }
+                    
                 }
                 
-                if (c < 250 && c % 5 == 0) {
-                
-                    imwrite("/Users/gioel/Desktop/Test_noboat/img" + to_string(9) + "_" + to_string(im_c) + ".jpg", window);
-                    im_c ++;
-                }
                 imshow("Window", draw_window);
-                waitKey(0);
+                waitKey(1);
             
-                c ++;
             }
             i += stepSize;
         }
@@ -96,7 +104,224 @@ void Detection::pyramid(double scale, Mat image, int stepSize, int windowSize) {
         Size size(image.cols/scale, image.rows/scale);
         resize(image, image, size);
     }
+    if (tot_num_boats <= 1) {
+        
+        for (int i=0; i<boat_rects.size(); i ++) {
+            
+            rectangle(total_rects, boat_rects.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
+        }
+        groupRectangles(boat_rects, 2, 0.3);
+        
+        for (int i=0; i<boat_rects.size(); i++) {
+    
+            rectangle(clustered_image, boat_rects.at(i), cv::Scalar(0, 255, 0), 3);
+        }
+        
+    }
+    else {
+        
+        for (int i=0; i< rects.size(); i++) {
+            
+            rectangle(total_rects, rects.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
+        }
+        
+        groupRectangles(rects, 3, 0.3);
+        for (int i=0; i<rects.size(); i++) {
+    
+            rectangle(clustered_image, rects.at(i), cv::Scalar(0, 255, 0), 3);
+        }
+        //groupRectangles(rects, 1, 0.3);
+    }
+    cout<<tot_num_boats<<endl;
+    
+    imshow("Result merging", clustered_image);
+    imshow("Result total", total_rects);
+    waitKey(0);
+    
+    //groupRectangles(rect_cluster, 1, 0.3);
+
+//    for (int i=0; i< rect_cluster.size(); i++) {
+//
+//        rectangle(clustered_image, rect_cluster.at(i), cv::Scalar(0, 255, 0), 3);
+//    }
 }
+
+
+
+
+//
+//
+//
+void Detection::dataset(String path) {
+    
+    int stepSize = 50;
+    //Kaggle: windowSize = 200
+    //venice: windowSize = 240
+    int windowSize = 240;
+    double scale = 1.5;
+
+    int num_images = 50;
+    vector<String> fn;
+    glob(path, fn);
+    int tot_numb_images = fn.size();
+    cout<<tot_numb_images<<endl;
+    
+    for (int num_im = 0; num_im < tot_numb_images; num_im ++) {
+        
+        Mat im = imread(fn.at(num_im), IMREAD_COLOR);
+        
+        int num_noboat = 0;
+        int num_boat = 0;
+        
+        while((im.rows >= windowSize) && (im.cols >= windowSize)) {
+
+            // Sliding window
+            int i = 0; // row
+
+            int count_slidWindow = 0;
+            while (i <= im.rows - windowSize) {
+
+                for (int j = 0; j <= im.cols - windowSize; j += stepSize) {
+
+                    String model_path_pb = "/Users/gioel/Documents/Control\ System\ Engineering/Computer\ Vision/Final\ Project/Model/boat_class.pb";
+                    //Kaggle: Rect rect(j, i, 200, windowSize);
+                    Rect rect(j, i, 200, windowSize);
+                    Mat sub_im = im.clone();
+                    sub_im = sub_im(rect);
+
+//                        imshow("Window", sub_im);
+//                        waitKey(1);
+
+                    Mat draw_window = im.clone();
+                    rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 1);
+                    imshow("Window", draw_window);
+                    waitKey(1);
+
+                    if (count_slidWindow % 2 == 0) {
+
+                        resize(sub_im, sub_im, Size(300, 300));
+                        dnn::Net net = dnn::readNetFromTensorflow(model_path_pb);
+                        Mat img_toNet_blob = cv::dnn::blobFromImage(sub_im);
+                        net.setInput(img_toNet_blob);
+                        Mat res;
+                        net.forward(res);
+
+                        if (round(res.at<float>(0)) == 1) {
+
+                            imshow("Boat", sub_im);
+                            waitKey(1);
+                            imwrite("/Users/gioel/Desktop/Dataset_tot/Boat/img" + to_string(num_im) + "_" + to_string(num_boat) + ".jpg", sub_im);
+                            num_boat ++;
+                            //rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 1);
+                        }
+
+                        if (round(res.at<float>(0)) == 0) {
+
+                            imshow("No Boat", sub_im);
+                            waitKey(1);
+                            imwrite("/Users/gioel/Desktop/Dataset_tot/No Boat/img" + to_string(num_im) + "_" + to_string(num_noboat) + ".jpg", sub_im);
+                            num_noboat ++;
+                            //rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 1);
+                        }
+                    }
+                    count_slidWindow ++;
+                }
+                // Kaggle: i+= 50
+                i += 80;
+            }
+            
+            Size size(im.cols/scale, im.rows/scale);
+            resize(im, im, size);
+            cout<<num_im<<endl;
+        }
+    }
+}
+
+//void Detection::pyramid(double scale, Mat image, int stepSize, int windowSize, String model_path_pb) {
+//
+//    Mat immm = image.clone();
+//    Mat tot = image.clone();
+//
+//    int c = 0;
+//    int im_c = 0;
+//
+//    vector<Rect> rect_cluster;
+//    vector<Rect> rects;
+//    while (image.rows >= windowSize && image.cols >= windowSize) {
+//
+//        // Sliding window
+//        int i = 0; // row
+//        while (i <= image.rows - windowSize) {
+//
+//            for (int j = 0; j <= image.cols - windowSize; j += stepSize) {
+//
+//                Rect rect(j, i, windowSize, windowSize);
+//                Mat draw_window = image.clone();
+//                Mat window = draw_window(rect);
+////                if (j == 0) {
+////
+////                    imshow("okk", aa);
+////                    waitKey(0);
+////                }
+//
+//                //Mat img_toNet = Mat(draw_window,rect); // Img to give to Net
+//                resize(window, window, Size(300, 300));
+//                dnn::Net net = dnn::readNetFromTensorflow(model_path_pb);
+//                Mat img_toNet_blob = cv::dnn::blobFromImage(window);
+//                net.setInput(img_toNet_blob);
+//                Mat res;
+//                net.forward(res);
+//                cout<<res<<endl;
+//
+//                if (res.at<float>(0) >= 0.8) {
+//
+//                    imshow("Boat", window);
+//                    waitKey(1);
+//                    rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 1);
+//                    rect_cluster.push_back(rect);
+//                    rects.push_back(rect);
+//                }
+//
+//                if (res.at<float>(0) < 0.8) {
+//
+//                    imshow("No Boat", window);
+//                    waitKey(1);
+//                    rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 1);
+//                }
+//
+//                if (c < 250 && c % 5 == 0) {
+//
+//                    imwrite("/Users/gioel/Desktop/Test_noboat/img" + to_string(9) + "_" + to_string(im_c) + ".jpg", window);
+//                    im_c ++;
+//                }
+//                imshow("Window", draw_window);
+//                waitKey(0);
+//
+//                c ++;
+//            }
+//            i += stepSize;
+//        }
+//
+//        Size size(image.cols/scale, image.rows/scale);
+//        resize(image, image, size);
+//    }
+//    groupRectangles(rect_cluster, 2, 0.3);
+//
+//    for (int i=0; i< rect_cluster.size(); i++) {
+//
+//        rectangle(immm, rect_cluster.at(i), cv::Scalar(0, 255, 0), 1);
+//    }
+//
+//    for (int i=0; i< rects.size(); i++) {
+//
+//        rectangle(tot, rects.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 1);
+//    }
+//    imshow("Result merging", immm);
+//
+//
+//    imshow("Result total", tot);
+//    waitKey(0);
+//}
 
 void Detection::preprocessing(String pattern) {
     
@@ -469,4 +694,23 @@ void Detection::showAndCompute_sift() {
 //            waitKey(0);
         }
     }
+}
+
+vector<Rect> Detection::selective_search(Mat image, String method) {
+    
+    Ptr<cv::ximgproc::segmentation::SelectiveSearchSegmentation> sel_search = cv::ximgproc::segmentation::createSelectiveSearchSegmentation();
+    sel_search->setBaseImage(image);
+    
+    if (method == "fast") {
+        
+        sel_search->switchToSelectiveSearchFast(); // Fast but less accurate version of selective search
+    }
+    else {
+        
+        sel_search->switchToSelectiveSearchQuality(); // Slower but more accurate version
+    }
+    
+    vector<Rect> rects;
+    sel_search->process(rects);
+    return rects;
 }

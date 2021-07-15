@@ -6,7 +6,8 @@
 #include <opencv2/calib3d.hpp>
 #include <opencv2/dnn.hpp>
 #include <iostream>
-#include <opencv2/ximgproc.hpp>
+#include <opencv2/ximgproc/segmentation.hpp>
+#include <opencv2/objdetect.hpp>
 
 #include <opencv2/photo.hpp>
 
@@ -24,11 +25,14 @@ public:
     Detection(String pattern);
     
     // Methods
-    void pyramid(double scale, Mat image, int stepSize, int windowSize);
+    void dataset(String path);
+    void pyramid(double scale, Mat image, int stepSize, int windowSize_rows, int windowSize_cols, String model_path_pb);
     void Kmeans_segmentation(int k);
     void otsu_segmentation();
     void showAndCompute_sift();
     void preprocessing(String pattern);
+    
+    vector<Rect> selective_search(Mat image, String method);
     
 // Data
 

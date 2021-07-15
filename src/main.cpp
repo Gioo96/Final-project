@@ -7,15 +7,33 @@ using namespace cv;
 
 int main(int argc, const char * argv[]) {
 
+//    String p_boat = "/Users/gioel/Desktop/Dataset_tot/Boat/*.jpg";
+//    String p_noboat = "/Users/gioel/Desktop/Dataset_tot/No Boat/*.jpg";
+//
+//    String p_dest_boat = "/Users/gioel/Desktop/VENICE_300_300/Boat/";
+//    String p_dest_noboat = "/Users/gioel/Desktop/VENICE_300_300/No Boat/";
+//
+//    vector<String> fb;
+//    glob(p_noboat, fb);
+//    cout<<fb.size()<<endl;
+//    for (int i=0;i<fb.size();i++) {
+//
+//        Mat im = imread(fb.at(i), IMREAD_COLOR);
+//        resize(im, im, Size(300,300));
+//        imwrite(p_dest_noboat + "img" + to_string(i) + ".jpg", im);
+//    }
+    
     // PREPROCESSING DATASET IMAGES //
     //
     //
     //
     
 //    String MarDCT_training = "/Users/gioel/Documents/Control System Engineering/Computer Vision/Final Project/data/Classification/MarDCT/training/";
-//    String Kaggle_training_boat = "/Users/gioel/Desktop/Kaggle training Boat/";
+//   String Kaggle_training_boat = "/Users/gioel/Documents/Control\ System\ Engineering/Computer\ Vision/Final\ Project/data/Classification/FINAL_DATASET/Kaggle\ training\ Boat/";
 //    String pattern_dest_training_boat = "/Users/gioel/Desktop/Training/Boat/";
 //    String pattern_dest_training_noboat = "/Users/gioel/Desktop/Training/No Boat/";
+    
+    
 //    // MAR DCT TRAINING
 //    //String pattern_dest_noboat = MarDCT_training + "No Boat/";
 //
@@ -55,13 +73,14 @@ int main(int argc, const char * argv[]) {
 //        }
 //    }
 //
-//    // KAGGLE TRAINING
-//
+    // KAGGLE TRAINING
+
 //    String Kaggle_training_set = Kaggle_training_boat + "/*.jpg";
 //    vector<String> fn1;
 //    glob(Kaggle_training_set, fn1, false);
 //
 //    int count1 = fn1.size();
+//    cout<<count1<<endl;
 //    for (int i = 0; i <count1; i++) {
 //
 //        Mat single_img_gray = imread(fn1[i], IMREAD_COLOR);
@@ -190,32 +209,42 @@ int main(int argc, const char * argv[]) {
 //    }
     
     
+    // CREATION DATASET_TOT
+    //
+    //
+    // KAGGLE
+//    String Kaggle_dir = "/Users/gioel/Documents/Control\ System\ Engineering/Computer\ Vision/Final\ Project/data/Classification/FINAL_DATASET/Kaggle\ training\ Boat/";
+//    String Kaggle_images = Kaggle_dir + "/*.jpg";
+//    String dest_Kaggle = "/Users/gioel/Desktop/Kaggle/";
+//
+//    vector<String> fn_Kaggle;
+//    glob(Kaggle_images, fn_Kaggle, false);
+//
+//    int count_Kaggle = fn_Kaggle.size();
+//
+//    int count_images = 0;
+//    for (int i = 0; i <count_Kaggle; i += 10) {
+//
+//        Mat single_img_gray = imread(fn_Kaggle[i], IMREAD_COLOR);
+//        imwrite(dest_Kaggle  + "img" + to_string(count_images) + ".jpg", single_img_gray);
+//        count_images += 1;
+//    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
     String pattern_venice = "/Users/gioel/Documents/Control System Engineering/Computer Vision/Final Project/data/venice_dataset";
 //
     String pattern_kaggle = "/Users/gioel/Documents/Control System Engineering/Computer Vision/Final Project/data/Kaggle_ships";
-    
-    String cut_dataset_venice = "/Users/gioel/Desktop/Cut\ images/Kaggle_ships";
-//
-//    String p = "/Users/gioel/Desktop/cartella\ senza\ nome/02.png";
-//
-//    Mat i = imread(p, IMREAD_COLOR);
-//    cout<<i<<endl;
-//
+
     Detection boat(pattern_kaggle);
-//    boat.preprocessing(pattern_venice);
-//    int stepSize = 50;
-//    int windowSize = 200;
-//    double scale = 1.5;
-//
-//    Mat image = boat.test_images.at(1);
-//    //boat.pyramid(scale, image, stepSize, windowSize);
-//    boat.HOG(image);
     
-    String model_path_pb = "/Users/gioel/Documents/Control\ System\ Engineering/Computer\ Vision/Final\ Project/Model/boat_class.pb";
-    
-    String model_path_pbtxt = "/Users/gioel/Documents/Control\ System\ Engineering/Computer\ Vision/Final\ Project/Model/boat_class.pbtxt";
-    
-    String provaa = "/Users/gioel/Desktop/Cut\ images/blue-boat-freedom-horizon-ocean-2878.jpg";
+    String model_path_pb = "/Users/gioel/Documents/Control\ System\ Engineering/Computer\ Vision/Final\ Project/Model/model_cnn.pb";
     
     dnn::Net net = dnn::readNetFromTensorflow(model_path_pb);
 
@@ -247,15 +276,31 @@ int main(int argc, const char * argv[]) {
         cout<<round(res.at<float>(0))<<endl;
     }
 
-    //boat.Kmeans_segmentation(3);
-    //boat.otsu_segmentation();
-    //boat.showAndCompute_sift();
-    int stepSize = 50;
-    int windowSize = 200;
+    int stepSize = 30;
+    int windowSize_rows = 150;
+    int windowSize_cols = 150;
     double scale = 1.5;
 
-    boat.pyramid(scale, boat.test_images.at(1), stepSize, windowSize);
+    boat.pyramid(scale, boat.test_images.at(2), stepSize, windowSize_rows, windowSize_cols, model_path_pb);
     
+    Mat im = imread("/Users/gioel/Documents/Control\ System\ Engineering/Computer\ Vision/Final\ Project/data/Kaggle_ships/boat-ferry-departure-crossing-sea-2733061.jpg", IMREAD_COLOR);
+    
+    Mat dr = im.clone();
+    vector<Rect> rects = boat.selective_search(im, "slow");
+    for(int i = 0; i < rects.size(); i ++) {
+        
+        rectangle(dr, rects.at(i), cv::Scalar(0, 255, 0), 3);
+    }
+    imshow("all", dr);
+    waitKey(0);
+    Mat mer = im.clone();
+    groupRectangles(rects, 1, 0.3);
+    for(int i = 0; i < rects.size(); i ++) {
+        
+        rectangle(mer, rects.at(i), cv::Scalar(0, 255, 0), 3);
+    }
+    imshow("merging", mer);
+    waitKey(0);
     
 //    Point classIdPoint;
 //    double confidence;
