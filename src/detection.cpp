@@ -40,10 +40,15 @@ void Detection::pyramid(double scale, Mat image, int stepSize, int windowSize_ro
     Mat clustered_image = image.clone();
     Mat total_rects = image.clone();
     
+    vector<Rect> a;
+    Mat aaa = image.clone();
+    
     vector<int> probabilities;
     vector<Rect> boat_rects;
 
     vector<Rect> rects;
+    
+    int pyramid_level = 0;
     while (image.rows >= windowSize_rows && image.cols >= windowSize_cols) {
         
         // Sliding window
@@ -64,7 +69,6 @@ void Detection::pyramid(double scale, Mat image, int stepSize, int windowSize_ro
                 net.setInput(img_toNet_blob);
                 Mat prob;
                 net.forward(prob);
-                cout<<"Probability: "<<prob<<endl;
                 
                 if (prob.at<float>(0) >= 0.8) {
 
@@ -74,6 +78,14 @@ void Detection::pyramid(double scale, Mat image, int stepSize, int windowSize_ro
                     probabilities.push_back(round(prob.at<float>(0)));
                     // Save sub-images detected as boats into rects, rect_cluster
                     //rect_cluster_08.push_back(rect);
+                    if (pyramid_level > 0) {
+    
+                        cout<<"BEFORE: "<<rect.x<<" "<<rect.y<<" "<<rect.width<<" "<<rect.height<<endl;
+                        rect = Rect(int(rect.x*scale*pyramid_level), int(rect.y*scale*pyramid_level), int(rect.width*scale*pyramid_level), int(rect.height*scale*pyramid_level));
+                        cout<<"AFTER: "<<rect.x<<" "<<rect.y<<" "<<rect.width<<" "<<rect.height<<endl;
+                        a.push_back(rect);
+                    }
+                    
                     rects.push_back(rect);
                     //
                     tot_num_boats ++;
@@ -103,6 +115,7 @@ void Detection::pyramid(double scale, Mat image, int stepSize, int windowSize_ro
     
         Size size(image.cols/scale, image.rows/scale);
         resize(image, image, size);
+        pyramid_level ++;
     }
     if (tot_num_boats <= 1) {
         
@@ -110,7 +123,7 @@ void Detection::pyramid(double scale, Mat image, int stepSize, int windowSize_ro
             
             rectangle(total_rects, boat_rects.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
         }
-        groupRectangles(boat_rects, 2, 0.3);
+        groupRectangles(boat_rects, 3, 0.2);
         
         for (int i=0; i<boat_rects.size(); i++) {
     
@@ -125,7 +138,7 @@ void Detection::pyramid(double scale, Mat image, int stepSize, int windowSize_ro
             rectangle(total_rects, rects.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
         }
         
-        groupRectangles(rects, 3, 0.3);
+        groupRectangles(rects, 3, 0.1);
         for (int i=0; i<rects.size(); i++) {
     
             rectangle(clustered_image, rects.at(i), cv::Scalar(0, 255, 0), 3);
@@ -144,9 +157,15 @@ void Detection::pyramid(double scale, Mat image, int stepSize, int windowSize_ro
 //
 //        rectangle(clustered_image, rect_cluster.at(i), cv::Scalar(0, 255, 0), 3);
 //    }
+    
+    for (int i = 0;i<a.size();i ++) {
+        
+        rectangle(aaa, a.at(i), cv::Scalar(0, 255, 0), 3);
+    }
+
+    imshow("aa", aaa);
+    waitKey(0);
 }
-
-
 
 
 //
