@@ -143,16 +143,16 @@ Detection::Detection(String pattern, int fl) : Base(pattern, fl) {
 // METHODS
 // detection
 void Detection::detection(vector<Mat> image, String model_CNN_pb) {
-    
+
     int scaling;
     int min_rect;
     double eps;
     int stepSize;
     int windowSize_rows;
     int windowSize_cols;
-    
+
     if (flag == 1) {
-        
+
         scaling = 1;
         min_rect = 1;
         eps = 0.8;
@@ -160,9 +160,9 @@ void Detection::detection(vector<Mat> image, String model_CNN_pb) {
         windowSize_rows = 115;
         windowSize_cols = 115;
     }
-    
+
     else {
-        
+
         scaling = 2;
         min_rect = 2;
         eps = 0.6;
@@ -170,108 +170,108 @@ void Detection::detection(vector<Mat> image, String model_CNN_pb) {
         windowSize_rows = 150;
         windowSize_cols = 150;
     }
-    
+
     for (int index_image = 0; index_image < image.size(); index_image++) {
-        
+
         cout<<endl<<"--------------"<<endl;
         cout<<"Boat detection on image N. "<<to_string(index_image)<<"..."<<endl;
         int tot_num_boats_08 = 0; // Total number of detected boats (counted if prob >= 0.8), where prob is the probability for the sub-image to belong to the class "Boat" given by the CNN
 
         int tot_num_boats_05 = 0; // Total number of detected boats (counted if prob >= 0.5), where prob is the probability for the sub-image to belong to the class "Boat" given by the CNN
-        
+
         ////Mat image_allRects = image.at(index_image).clone();
 
         Mat image_final = image.at(index_image).clone();
         ////Mat image_seeds = image.at(index_image).clone();
-        
+
         vector<Rect> temp_rects;
 
         vector<Rect> rects_08;
         vector<Rect> rects_05;
         int merged = 0;
-    
+
         // Sliding window : only the first level of the pyramid is considered
         int i = 0; // row
-        
+
         while (i <= image.at(index_image).rows - windowSize_rows) {
-            
+
             for (int j = 0; j <= image.at(index_image).cols - windowSize_cols; j += stepSize) { // col
-                
+
                 Rect rect(j, i, windowSize_cols, windowSize_rows);
                 Mat draw_window = image.at(index_image).clone(); // Image in which the sliding windows are drawn
                 Mat window = draw_window(rect); // Sub-image to be given to the CNN for classification
-            
+
                 // Resize window (it has to be 300x300 since CNN was trained with images with such sizes)
                 resize(window, window, Size(300, 300));
-                
+
                 // Load CNN model
                 dnn::Net net = dnn::readNetFromTensorflow(model_CNN_pb);
                 Mat img_toNet_blob = cv::dnn::blobFromImage(window);
                 net.setInput(img_toNet_blob);
                 Mat prob;
                 net.forward(prob);
-                
+
                 // Probability >= 0.8
                 if (prob.at<float>(0) >= 0.8) {
-                                        
+
                     rects_08.push_back(rect);
                     tot_num_boats_08 ++;
                 }
-                
+
                 else {
-                    
+
                     if (round(prob.at<float>(0)) == 1) {
-                        
-                        
+
+
                         rects_05.push_back(rect);
                     }
                 }
-                
+
                 rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 3);
                 imshow("Boat detection on image N. " + to_string(index_image), draw_window);
                 waitKey(1);
             }
-            
+
             i += stepSize;
         }
 
         if (tot_num_boats_08 == 0 && tot_num_boats_05 > 0) {
-            
+
             for (int i = 0; i < rects_05.size(); i ++) {
-                
+
                 Rect rect_temporal = rects_05.at(i);
                 String boat = "BOAT N.";
                 putText(image_final, boat + to_string(i+1) , Point(rect_temporal.x, rect_temporal.y - 5),FONT_HERSHEY_COMPLEX, 0.8, Scalar(0,0,0), 2, FILLED);
                 rectangle(image_final, rects_05.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
             }
         }
-        
+
         else if (tot_num_boats_08 > 0) {
-            
+
             for (int i = 0; i < rects_08.size(); i ++) {
-                
+
                 //rectangle(image_allRects, rects_08.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
             }
-            
+
             vector<double> probabilties_output(rects_08.size());
             temp_rects = rects_08;
-            
+
             if (rects_08.size() > 1) {
-    
+
                 // rect_08 now contains the seed rectangles
                 groupRectangles(rects_08, min_rect, eps);
-                
+
                 // Draw seed rectangles
                 for (int i = 0; i < rects_08.size(); i ++) {
-                    
+
                     //rectangle(image_seeds, rects_08.at(i), cv::Scalar(0, 255, 0), 3);
                 }
             }
-    
+
             vector<Rect> output_rect = rect_return(temp_rects, rects_08, scaling);
-            
+
             vector<Rect> output_first_rect = output_rect;
-            
+
             // INTERSECTION
             int equal = 2;
             int x_inter;
@@ -283,88 +283,88 @@ void Detection::detection(vector<Mat> image, String model_CNN_pb) {
             double area_2;
             double area_max;
             vector<int> rect_saved;
-            
+
             // Verify how intersect
             for (int i = 0; i < output_first_rect.size(); i ++){
-                
+
                 int x_current_1 = output_first_rect.at(i).x;
                 int y_current_1 = output_first_rect.at(i).y;
                 int height_current_1 = output_first_rect.at(i).height;
                 int width_current_1 = output_first_rect.at(i).width;
-                
+
                 for (int j = 0; j<output_first_rect.size(); j ++){
-                    
+
                     if (j!= i){
-                        
+
                         int x_current_2 = output_first_rect.at(j).x;
                         int y_current_2 = output_first_rect.at(j).y;
                         int height_current_2 = output_first_rect.at(j).height;
                         int width_current_2 = output_first_rect.at(j).width;
-   
+
                         x_inter = max(x_current_1, x_current_2);
                         y_inter = max(y_current_1, y_current_2);
                         height_inter = min(y_current_1+height_current_1, y_current_2+height_current_2) - y_inter;
                         width_inter = min(x_current_1+width_current_1, x_current_2+width_current_2) - x_inter;
-                        
+
                         if (height_inter >0 && width_inter>0){
-                            
+
                             area_inter = height_inter * width_inter;
                             area_1 = height_current_1 * width_current_1;
                             area_2 = height_current_2 * width_current_2;
-                            
+
                             area_max = max(area_1, area_2);
-                            
+
                             double eval = area_inter/area_max;
-                            
+
                             if (eval > 0.1){
-                                
-                                
+
+
                                 if (area_1 >= area_2){
-                                    
+
                                     rect_saved.push_back(i);
                                     equal =1;
                                 }
                                 else {
-                                 
+
                                     rect_saved.push_back(j);
                                     equal = 1;
-                                    
+
                                 }
                             }
                         }
                     }
                 }
             }
-            
+
             if (equal == 1) {
-                
+
                 vector<Rect> output_reect;
                 output_reect.push_back(output_first_rect.at(rect_saved[0]));
                 getMetrics(output_reect, image_final, index_image);
-                
+
                 Rect rect_temporal = output_first_rect.at(rect_saved[0]);
                 String boat = "BOAT N.";
                 putText(image_final, boat + to_string(1), Point(rect_temporal.x, rect_temporal.y - 5), FONT_HERSHEY_COMPLEX, 0.8, Scalar(0,0,0), 2, FILLED);
                 rectangle(image_final, output_first_rect.at(rect_saved[0]), Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
             }
-            
+
             else if (equal == 0) {
-                
+
                 for (int i = 0; i < rect_saved.size(); i ++) {
-                    
+
                     Rect rect_temporal = output_first_rect.at(i);
                     String boat = "BOAT N.";
                     putText(image_final, boat + to_string(i + 1), Point(rect_temporal.x, rect_temporal.y - 5), FONT_HERSHEY_COMPLEX, 0.8, Scalar(0,0,0), 2, FILLED);
                     rectangle(image_final, output_first_rect.at(rect_saved[i]), Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
                 }
             }
-            
+
             else if (equal == 2) {
-                
+
                 getMetrics(output_first_rect, image_final, index_image);
 
                 for (int i = 0; i < output_first_rect.size(); i ++) {
-                    
+
                     Rect rect_temporal = output_first_rect.at(i);
                     String boat = "BOAT N.";
                     putText(image_final, boat + to_string(i + 1), Point(rect_temporal.x, rect_temporal.y - 5), FONT_HERSHEY_COMPLEX, 0.8, Scalar(0,0,0), 2, FILLED);
@@ -372,12 +372,12 @@ void Detection::detection(vector<Mat> image, String model_CNN_pb) {
                 }
             }
         }
-        
+
         imshow("Detected boats N."+to_string(index_image), image_final);
         cout<<"Please press a key"<<endl;
         waitKey(0);
         destroyAllWindows();
-        
+
 //            imshow("All rects", image_allRects);
 //            waitKey(0);
 //
@@ -385,6 +385,7 @@ void Detection::detection(vector<Mat> image, String model_CNN_pb) {
 //            waitKey(0);
     }
 }
+
 
 // rect_return
 vector<Rect> Detection::rect_return(vector<Rect> all_rects, vector<Rect> seed_rects, int scaling) {
@@ -714,12 +715,13 @@ vector<Mat> Segmentation::segmentation(String ground_truth_segmentation_path) {
             if (i != 9) {
                 
                 // Smooth the image
-                GaussianBlur(image_test, image_test, Size (27,27), 0, 0);
+                Mat image_smoothed;
+                GaussianBlur(image_test, image_smoothed, Size (27,27), 0, 0);
                 
                 // KMEANS SEGMENTATION BASED ON COLOR
                 // Covert the image into CV_32F
                 Mat data;
-                image_test.convertTo(data, CV_32F);
+                image_smoothed.convertTo(data, CV_32F);
                 
                 // Reshape data
                 data = data.reshape(1, data.total());
@@ -785,7 +787,7 @@ vector<Mat> Segmentation::segmentation(String ground_truth_segmentation_path) {
                 Mat dilate_subimg = color_segmented_img(Rect(0, 0, color_segmented_img.cols, current_y));
                 
                 // Structuring element
-                Mat str_el_dilate = getStructuringElement(MORPH_RECT, Size(11,11));
+                Mat str_el_dilate = getStructuringElement(MORPH_RECT, Size(21,21));
                 dilate(dilate_subimg, dst_dilate_above, str_el_dilate, Point(-1,-1), 15);
                 
                 // ERODE+DILATE BELOW
@@ -793,7 +795,7 @@ vector<Mat> Segmentation::segmentation(String ground_truth_segmentation_path) {
                 Mat erode_subimg = color_segmented_img(Rect(0, current_y, color_segmented_img.cols, color_segmented_img.rows - current_y));
                 
                 // Structuring element
-                Mat str_el_erode_dilate = getStructuringElement(MORPH_RECT, Size(7,7));
+                Mat str_el_erode_dilate = getStructuringElement(MORPH_RECT, Size(13,13));
                 erode(erode_subimg, dst_erode_dilate_below, str_el_erode_dilate, Point(-1,-1), 2);
                 dilate(dst_erode_dilate_below, dst_erode_dilate_below, str_el_erode_dilate, Point(-1,-1), 2);
                 
@@ -858,47 +860,216 @@ vector<Mat> Segmentation::segmentation(String ground_truth_segmentation_path) {
     // VENICE DATASET
     else {
         
-        vector<Mat> data;
         for (int i = 0; i < test_images.size(); i ++) {
             
             cout<<endl<<"--------------"<<endl;
             cout<<"Sea segmentation on image N. "<<to_string(i)<<"..."<<endl;
+            Mat image_test = test_images.at(i).clone();
+            
+            // Conversion to HSV
+            Mat image_hsv;
+            cvtColor(image_test, image_hsv, COLOR_BGR2HSV);
+
+            // Equalization on HSV
             vector<Mat> planes;
             Mat image_equal;
-            Mat image_hsv;
-            vector<Mat> equalized_channel;
-            vector<Mat> equalized_images;
-            Mat gray_image;
-            Mat image_segmented;
-            Mat show_image;
-            
-            cvtColor(test_images.at(i), image_hsv, COLOR_BGR2HSV);
-            
             split(image_hsv, planes);
-            
-            //equalizeHist(planes[0], planes[0]);         // Blue channel equalized
-            //equalizeHist(planes[1], planes[1]);        // Green channel equalized
             equalizeHist(planes[2], planes[2]);
-            cout<< "DEBUG" <<endl;
             merge(planes,image_equal);
             cvtColor(image_equal, image_equal, COLOR_HSV2BGR);
             GaussianBlur(image_equal, image_equal, Size(5,5), 0);
-            equalized_images.push_back(image_equal);
 
-            
             // OTSU
+            Mat gray_image;
             cvtColor(image_equal, gray_image, COLOR_BGR2GRAY);
+            Mat image_segmented;
             threshold(gray_image, image_segmented, 0, 255, THRESH_OTSU);
-            cvtColor(image_segmented, show_image, COLOR_GRAY2BGR);
             
-            imshow("not eroded", image_segmented);
-            Mat kernel = getStructuringElement(0, Size(7,7));
-            //dilate(image_segmented, image_segmented, kernel, Point(-1,-1), 5);
-            erode(image_segmented, image_segmented, kernel, Point(-1,-1), 7);
-            dilate(image_segmented, image_segmented, kernel, Point(-1,-1), 2);
-            imshow("eroded", image_segmented);
-            imshow("ORIginal", image_equal);
-            waitKey(0);
+            if (i == 0) {
+
+                // Erosion
+                Mat kernel_erode = getStructuringElement(0, Size(7,7));
+                erode(image_segmented, image_segmented, kernel_erode, Point(-1,-1), 5);
+                
+                // Dilation
+                Mat kernel_dilate = getStructuringElement(0, Size(7,7));
+                dilate(image_segmented, image_segmented, kernel_dilate, Point(-1,-1), 4);
+                
+                // Concatenate the original image and segmented image
+                Mat show_img;
+                cvtColor(image_segmented, show_img, COLOR_GRAY2BGR);
+                Mat original_segmentated;
+                hconcat(image_test, show_img, original_segmentated);
+                
+                // Show result
+                imshow("Segmentation img n. " + to_string(i), original_segmentated);
+                
+                // Metric
+                segmented_images.push_back(image_segmented);
+                double pixel_accuracy = getMetrics(ground_truth_segmentation_path, image_segmented, i);
+                cout<<"METRIC OF IMAGE "<<to_string(i)<<": "<<to_string(pixel_accuracy)<<endl;
+                cout<<"Pleas press a key"<<endl;
+                waitKey(0);
+                
+                imwrite("/Users/gioel/Desktop/images/ven"+to_string(i)+"_seg.jpg", original_segmentated);
+            }
+            
+            else if (i == 3 || i == 11) {
+           
+                // Dilation
+                Mat kernel_dilate = getStructuringElement(0, Size(7,7));
+                dilate(image_segmented, image_segmented, kernel_dilate, Point(-1,-1), 5);
+                
+                // Concatenate the original image and segmented image
+                Mat show_img;
+                swap_colors(image_segmented);
+                cvtColor(image_segmented, show_img, COLOR_GRAY2BGR);
+                Mat original_segmentated;
+                hconcat(image_test, show_img, original_segmentated);
+                
+                // Show result
+                imshow("Segmentation img n. " + to_string(i), original_segmentated);
+                
+                // Metric
+                segmented_images.push_back(image_segmented);
+                double pixel_accuracy = getMetrics(ground_truth_segmentation_path, image_segmented, i);
+                cout<<"METRIC OF IMAGE "<<to_string(i)<<": "<<to_string(pixel_accuracy)<<endl;
+                cout<<"Pleas press a key"<<endl;
+                waitKey(0);
+                
+                imwrite("/Users/gioel/Desktop/images/ven"+to_string(i)+"_seg.jpg", original_segmentated);
+            }
+            
+            else if (i == 4) {
+
+                // Dilation
+                Mat kernel_dilate = getStructuringElement(0, Size(7,7));
+                dilate(image_segmented, image_segmented, kernel_dilate, Point(-1,-1), 5);
+                
+                // Erosion
+                Mat kernel_erode = getStructuringElement(0, Size(7,7));
+                erode(image_segmented, image_segmented, kernel_erode, Point(-1,-1), 5);
+                
+                // Concatenate the original image and segmented image
+                Mat show_img;
+                cvtColor(image_segmented, show_img, COLOR_GRAY2BGR);
+                Mat original_segmentated;
+                hconcat(image_test, show_img, original_segmentated);
+                
+                // Show result
+                imshow("Segmentation img n. " + to_string(i), original_segmentated);
+                
+                // Metric
+                segmented_images.push_back(image_segmented);
+                double pixel_accuracy = getMetrics(ground_truth_segmentation_path, image_segmented, i);
+                cout<<"METRIC OF IMAGE "<<to_string(i)<<": "<<to_string(pixel_accuracy)<<endl;
+                cout<<"Pleas press a key"<<endl;
+                waitKey(0);
+                
+                imwrite("/Users/gioel/Desktop/images/ven"+to_string(i)+"_seg.jpg", original_segmentated);
+            }
+            
+            else if (i == 5) {
+
+//                vector<String> fn;
+//                ground_truth_segmentation_path += "Venice/*jpg";
+//                glob(ground_truth_segmentation_path, fn);
+//                vector<Mat> Kaggle_gt; // Ground truth Kaggle images
+//                for (int ii = 0; ii < fn.size(); ii ++) {
+//
+//                    //imshow("AAA", imread(fn.at(i)));
+//                    Kaggle_gt.push_back(imread(fn.at(ii)));
+//                }
+//
+//                for (int ii = 0; ii < fn.size(); ii ++) {
+//
+//
+//                    imshow("AAA" + to_string(ii), Kaggle_gt.at(ii));
+//                    waitKey(0);
+//                }
+                
+                // Erosion
+                Mat kernel_erode = getStructuringElement(0, Size(7,7));
+                erode(image_segmented, image_segmented, kernel_erode, Point(-1,-1), 6);
+                
+                // Dilation
+                Mat kernel_dilate = getStructuringElement(0, Size(7,7));
+                dilate(image_segmented, image_segmented, kernel_dilate, Point(-1,-1), 4);
+                
+                // Concatenate the original image and segmented image
+                Mat show_img;
+                cvtColor(image_segmented, show_img, COLOR_GRAY2BGR);
+                Mat original_segmentated;
+                hconcat(image_test, show_img, original_segmentated);
+                
+                // Show result
+                imshow("Segmentation img n. " + to_string(i), original_segmentated);
+                
+                // Metric
+                segmented_images.push_back(image_segmented);
+                double pixel_accuracy = getMetrics(ground_truth_segmentation_path, image_segmented, i);
+                
+                cout<<"METRIC OF IMAGE "<<to_string(i)<<": "<<to_string(pixel_accuracy)<<endl;
+                cout<<"Pleas press a key"<<endl;
+                waitKey(0);
+                
+                imwrite("/Users/gioel/Desktop/images/ven"+to_string(i)+"_seg.jpg", original_segmentated);
+            }
+        
+        }
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+//        vector<Mat> data;
+//        for (int i = 0; i < test_images.size(); i ++) {
+//
+//            cout<<endl<<"--------------"<<endl;
+//            cout<<"Sea segmentation on image N. "<<to_string(i)<<"..."<<endl;
+//            vector<Mat> planes;
+//            Mat image_equal;
+//            Mat image_hsv;
+//            vector<Mat> equalized_channel;
+//            vector<Mat> equalized_images;
+//            Mat gray_image;
+//            Mat image_segmented;
+//            Mat show_image;
+//
+//            cvtColor(test_images.at(i), image_hsv, COLOR_BGR2HSV);
+//
+//            split(image_hsv, planes);
+//
+//            //equalizeHist(planes[0], planes[0]);         // Blue channel equalized
+//            //equalizeHist(planes[1], planes[1]);        // Green channel equalized
+//            equalizeHist(planes[2], planes[2]);
+//            cout<< "DEBUG" <<endl;
+//            merge(planes,image_equal);
+//            cvtColor(image_equal, image_equal, COLOR_HSV2BGR);
+//            GaussianBlur(image_equal, image_equal, Size(5,5), 0);
+//            equalized_images.push_back(image_equal);
+//
+//
+//            // OTSU
+//            cvtColor(image_equal, gray_image, COLOR_BGR2GRAY);
+//            threshold(gray_image, image_segmented, 0, 255, THRESH_OTSU);
+//            cvtColor(image_segmented, show_image, COLOR_GRAY2BGR);
+//
+//            imshow("not eroded", image_segmented);
+//            Mat kernel = getStructuringElement(0, Size(7,7));
+//            //dilate(image_segmented, image_segmented, kernel, Point(-1,-1), 5);
+//            erode(image_segmented, image_segmented, kernel, Point(-1,-1), 7);
+//            dilate(image_segmented, image_segmented, kernel, Point(-1,-1), 2);
+//            imshow("eroded", image_segmented);
+//            imshow("ORIginal", image_equal);
+//            waitKey(0);
             
             
             //KMEANS
@@ -937,7 +1108,6 @@ vector<Mat> Segmentation::segmentation(String ground_truth_segmentation_path) {
 //            imshow("ciao", color_segmented_img);
 //            waitKey(0);
 
-        }
     }
     
     return segmented_images;
@@ -960,6 +1130,7 @@ double Segmentation::getMetrics(String ground_truth_segmentation_path, Mat segme
     vector<String> fn;
     glob(ground_truth_segmentation_path, fn);
     vector<Mat> Kaggle_gt; // Ground truth Kaggle images
+    
     for (int i = 0; i < fn.size(); i ++) {
         
         Kaggle_gt.push_back(imread(fn.at(i)));
@@ -1269,7 +1440,7 @@ void HoughLine::drawStraightLine(cv::Mat& img, cv::Point p1, cv::Point p2, cv::S
                 q.y = img.rows;
         }
 
-        cv::line(img, p, q, color, 1);
+        cv::line(img, p, q, color, 4);
 }
 
 // onHoughLineThetaden

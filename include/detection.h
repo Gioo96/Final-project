@@ -56,11 +56,11 @@ public:
     Detection(String pattern, int fl);
     
     // METHODS
-    // sliding_window
+    // detection
     void detection(vector<Mat> image, String model_CNN_pb);
     // rect_return
     vector<Rect> rect_return(vector<Rect> all_rects, vector<Rect> seed_rects, int scaling);
-    // get_metrics
+    // getMetrics
     void getMetrics(vector<Rect> predicted_rects, Mat image_predicted, int index);
 };
 
@@ -75,14 +75,14 @@ public:
     // METHODS
     // segmentation
     vector<Mat> segmentation(String ground_truth_segmentation_path);
-    //click
-    void click(Mat image);
-    //onMouse
-    static void onMouse(int event, int x, int y, int f, void* userdata);
     // pixel_accuracy metric
     double getMetrics(String ground_truth_images, Mat segmentated_images, int index);
     //swap_colors
     void swap_colors(Mat& image);
+    //click
+    void click(Mat image);
+    //onMouse
+    static void onMouse(int event, int x, int y, int f, void* userdata);
 };
 
 // HOUGH LINE CLASS
