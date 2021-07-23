@@ -12,12 +12,11 @@
 #include <opencv2/photo.hpp>
 #include <filesystem>
 
-
+// Global variables
 int click_pair = 0;
 std::vector<std::pair<cv::Point, cv::Point>> vec_pairs;
 std::pair<cv::Point, cv::Point> p1_p2;
 cv::Point p1, p2;
-//cv::Mat mask;
 
 using namespace cv;
 using namespace std;
@@ -58,9 +57,11 @@ public:
     
     // METHODS
     // sliding_window
-    void sliding_window(Mat image, int stepSize, int windowSize_rows, int windowSize_cols, String model_CNN_pb);
+    void detection(vector<Mat> image, String model_CNN_pb);
     // rect_return
-    vector<Rect> rect_return(vector<Rect> all_rects, vector<Rect> seed_rects, vector<double> input_probabilities, vector<double> &output_probabilities);
+    vector<Rect> rect_return(vector<Rect> all_rects, vector<Rect> seed_rects, int scaling);
+    // get_metrics
+    void getMetrics(vector<Rect> predicted_rects, Mat image_predicted, int index);
 };
 
 // SEGMENTATION CLASS
@@ -73,56 +74,15 @@ public:
     
     // METHODS
     // segmentation
-    vector<Mat> segmentation();
+    vector<Mat> segmentation(String ground_truth_segmentation_path);
     //click
     void click(Mat image);
     //onMouse
     static void onMouse(int event, int x, int y, int f, void* userdata);
-    // pixel_accuracy
-    vector<double> pixel_accuracy(String ground_truth_images, vector<Mat> segmentated_images);
+    // pixel_accuracy metric
+    double getMetrics(String ground_truth_images, Mat segmentated_images, int index);
     //swap_colors
     void swap_colors(Mat& image);
-};
-
-// CANNY_EDGE CLASS
-class Canny_edge {
-
-public:
-
-    // CONSTRUCTOR
-    Canny_edge(cv::Mat input_image, int th1, int th2, int apertureSize);
-    
-    // METHODS
-    // Performs Canny edge detector algorithm
-    void doAlgorithm();
-    // Set threshold1 for Canny
-    void setThreshold1(int th1);
-    // Set threshold2 for Canny
-    void setThreshold2(int th2);
-    // Get threshold1
-    int getThreshold1();
-    // Get threshold2
-    int getThreshold2();
-    // Get result
-    cv::Mat getResult();
-    // onCannyThreshold_1
-    static void onCannyThreshold_1(int pos, void *userdata);
-    // onCannyThreshold_2
-    static void onCannyThreshold_2(int pos, void *userdata);
-
-// DATA
-protected:
-
-    // Aperture size of the Sobel operator (Canny)
-    int aperture_size_Canny;
-    // threshold_1
-    int threshold1_Canny;
-    // threshold_2
-    int threshold2_Canny;
-    // Input image
-    Mat input_image_canny;
-    // Result image
-    Mat result_image_canny;
 };
 
 // HOUGH LINE CLASS

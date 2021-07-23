@@ -52,8 +52,6 @@ Dataset::Dataset(String images_path, String model_CNN_path) {
 
                     Mat draw_window = im.clone();
                     rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 1);
-                    imshow("Sliding window", draw_window);
-                    waitKey(1);
 
                     // Save Boat-No_Boat images in the corresponding local directories
                     if (count_slidWindow % 2 == 0) {
@@ -129,8 +127,6 @@ Base::Base(String pattern, int fl) {
             
             test_images.push_back(imread(fn[i], IMREAD_COLOR));
             namedWindow("Image");
-            imshow("Image", test_images.at(i));
-            waitKey(1);
         }
     }
 }
@@ -145,199 +141,265 @@ Detection::Detection(String pattern, int fl) : Base(pattern, fl) {
 }
     
 // METHODS
-// sliding_window
-void Detection::sliding_window(Mat image, int stepSize, int windowSize_rows, int windowSize_cols, String model_CNN_pb) {
+// detection
+void Detection::detection(vector<Mat> image, String model_CNN_pb) {
     
+    int scaling;
+    int min_rect;
+    double eps;
+    int stepSize;
+    int windowSize_rows;
+    int windowSize_cols;
+    
+    if (flag == 1) {
         
-    int tot_num_boats_08 = 0; // Total number of detected boats (counted if prob >= 0.8), where prob is the probability for the sub-image to belong to the class "Boat" given by the CNN
+        scaling = 1;
+        min_rect = 1;
+        eps = 0.8;
+        stepSize = 40;
+        windowSize_rows = 115;
+        windowSize_cols = 115;
+    }
+    
+    else {
+        
+        scaling = 2;
+        min_rect = 2;
+        eps = 0.6;
+        stepSize = 30;
+        windowSize_rows = 150;
+        windowSize_cols = 150;
+    }
+    
+    for (int index_image = 0; index_image < image.size(); index_image++) {
+        
+        cout<<endl<<"--------------"<<endl;
+        cout<<"Boat detection on image N. "<<to_string(index_image)<<"..."<<endl;
+        int tot_num_boats_08 = 0; // Total number of detected boats (counted if prob >= 0.8), where prob is the probability for the sub-image to belong to the class "Boat" given by the CNN
 
-    int tot_num_boats_05 = 0; // Total number of detected boats (counted if prob >= 0.5), where prob is the probability for the sub-image to belong to the class "Boat" given by the CNN
-    
-    Mat clustered_image = image.clone();
-    Mat total_rects = image.clone();
-    Mat image_allRects = image.clone();
-    
-    vector<Rect> a;
-    Mat aaa = image.clone();
-    Mat image_final_rect = image.clone();
-    Mat image_seeds = image.clone();
-    Mat image_final = image.clone();
-    Mat final_img = image.clone();
-    
-    vector<double> probabilities_08;
-    vector<double> probabilities_05;
-    
-    vector<Rect> temp_rects;
+        int tot_num_boats_05 = 0; // Total number of detected boats (counted if prob >= 0.5), where prob is the probability for the sub-image to belong to the class "Boat" given by the CNN
+        
+        ////Mat image_allRects = image.at(index_image).clone();
 
-    vector<Rect> rects_08;
-    vector<Rect> rects_05;
-    int merged = 0;
+        Mat image_final = image.at(index_image).clone();
+        ////Mat image_seeds = image.at(index_image).clone();
         
-    // Sliding window : only the first level of the pyramid is considered
-    int i = 0; // row
-    
-    while (i <= image.rows - windowSize_rows) {
-        
-        for (int j = 0; j <= image.cols - windowSize_cols; j += stepSize) { // col
-            
-            Rect rect(j, i, windowSize_cols, windowSize_rows);
-            Mat draw_window = image.clone(); // Image in which the sliding windows are drawn
-            Mat window = draw_window(rect); // Sub-image to be given to the CNN for classification
-        
-            // Resize window (it has to be 300x300 since CNN was trained with images with such sizes)
-            resize(window, window, Size(300, 300));
-            
-            // Load CNN model
-            dnn::Net net = dnn::readNetFromTensorflow(model_CNN_pb);
-            Mat img_toNet_blob = cv::dnn::blobFromImage(window);
-            net.setInput(img_toNet_blob);
-            Mat prob;
-            net.forward(prob);
-            
-            // Probability >= 0.8
-            if (prob.at<float>(0) >= 0.8) {
+        vector<Rect> temp_rects;
 
-                imshow("Boat", window);
+        vector<Rect> rects_08;
+        vector<Rect> rects_05;
+        int merged = 0;
+    
+        // Sliding window : only the first level of the pyramid is considered
+        int i = 0; // row
+        
+        while (i <= image.at(index_image).rows - windowSize_rows) {
+            
+            for (int j = 0; j <= image.at(index_image).cols - windowSize_cols; j += stepSize) { // col
+                
+                Rect rect(j, i, windowSize_cols, windowSize_rows);
+                Mat draw_window = image.at(index_image).clone(); // Image in which the sliding windows are drawn
+                Mat window = draw_window(rect); // Sub-image to be given to the CNN for classification
+            
+                // Resize window (it has to be 300x300 since CNN was trained with images with such sizes)
+                resize(window, window, Size(300, 300));
+                
+                // Load CNN model
+                dnn::Net net = dnn::readNetFromTensorflow(model_CNN_pb);
+                Mat img_toNet_blob = cv::dnn::blobFromImage(window);
+                net.setInput(img_toNet_blob);
+                Mat prob;
+                net.forward(prob);
+                
+                // Probability >= 0.8
+                if (prob.at<float>(0) >= 0.8) {
+                                        
+                    rects_08.push_back(rect);
+                    tot_num_boats_08 ++;
+                }
+                
+                else {
+                    
+                    if (round(prob.at<float>(0)) == 1) {
+                        
+                        
+                        rects_05.push_back(rect);
+                    }
+                }
+                
+                rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 3);
+                imshow("Boat detection on image N. " + to_string(index_image), draw_window);
                 waitKey(1);
-                probabilities_08.push_back(static_cast<double>(prob.at<float>(0)));
-                
-                
-                rects_08.push_back(rect);
-                tot_num_boats_08 ++;
             }
             
-            else {
+            i += stepSize;
+        }
+
+        if (tot_num_boats_08 == 0 && tot_num_boats_05 > 0) {
+            
+            for (int i = 0; i < rects_05.size(); i ++) {
                 
-                imshow("No Boat", window);
-                waitKey(1);
+                Rect rect_temporal = rects_05.at(i);
+                String boat = "BOAT N.";
+                putText(image_final, boat + to_string(i+1) , Point(rect_temporal.x, rect_temporal.y - 5),FONT_HERSHEY_COMPLEX, 0.8, Scalar(0,0,0), 2, FILLED);
+                rectangle(image_final, rects_05.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
+            }
+        }
+        
+        else if (tot_num_boats_08 > 0) {
+            
+            for (int i = 0; i < rects_08.size(); i ++) {
                 
-                if (round(prob.at<float>(0)) == 1) {
+                //rectangle(image_allRects, rects_08.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
+            }
+            
+            vector<double> probabilties_output(rects_08.size());
+            temp_rects = rects_08;
+            
+            if (rects_08.size() > 1) {
+    
+                // rect_08 now contains the seed rectangles
+                groupRectangles(rects_08, min_rect, eps);
+                
+                // Draw seed rectangles
+                for (int i = 0; i < rects_08.size(); i ++) {
                     
+                    //rectangle(image_seeds, rects_08.at(i), cv::Scalar(0, 255, 0), 3);
+                }
+            }
+    
+            vector<Rect> output_rect = rect_return(temp_rects, rects_08, scaling);
+            
+            vector<Rect> output_first_rect = output_rect;
+            
+            // INTERSECTION
+            int equal = 2;
+            int x_inter;
+            int y_inter;
+            int height_inter;
+            int width_inter;
+            double area_inter;
+            double area_1;
+            double area_2;
+            double area_max;
+            vector<int> rect_saved;
+            
+            // Verify how intersect
+            for (int i = 0; i < output_first_rect.size(); i ++){
+                
+                int x_current_1 = output_first_rect.at(i).x;
+                int y_current_1 = output_first_rect.at(i).y;
+                int height_current_1 = output_first_rect.at(i).height;
+                int width_current_1 = output_first_rect.at(i).width;
+                
+                for (int j = 0; j<output_first_rect.size(); j ++){
                     
-                    rects_05.push_back(rect);
-                    probabilities_05.push_back(round(prob.at<float>(0)));
+                    if (j!= i){
+                        
+                        int x_current_2 = output_first_rect.at(j).x;
+                        int y_current_2 = output_first_rect.at(j).y;
+                        int height_current_2 = output_first_rect.at(j).height;
+                        int width_current_2 = output_first_rect.at(j).width;
+   
+                        x_inter = max(x_current_1, x_current_2);
+                        y_inter = max(y_current_1, y_current_2);
+                        height_inter = min(y_current_1+height_current_1, y_current_2+height_current_2) - y_inter;
+                        width_inter = min(x_current_1+width_current_1, x_current_2+width_current_2) - x_inter;
+                        
+                        if (height_inter >0 && width_inter>0){
+                            
+                            area_inter = height_inter * width_inter;
+                            area_1 = height_current_1 * width_current_1;
+                            area_2 = height_current_2 * width_current_2;
+                            
+                            area_max = max(area_1, area_2);
+                            
+                            double eval = area_inter/area_max;
+                            
+                            if (eval > 0.1){
+                                
+                                
+                                if (area_1 >= area_2){
+                                    
+                                    rect_saved.push_back(i);
+                                    equal =1;
+                                }
+                                else {
+                                 
+                                    rect_saved.push_back(j);
+                                    equal = 1;
+                                    
+                                }
+                            }
+                        }
+                    }
                 }
             }
             
-            rectangle(draw_window, rect, cv::Scalar(0, 255, 0), 3);
-            imshow("Window", draw_window);
-            waitKey(1);
-        }
-        
-        i += stepSize;
-    }
-
-    if (tot_num_boats_08 == 0 && tot_num_boats_05 > 0) {
-        
-        cout<<"IMAGE 05"<<endl;
-        for (int i = 0; i < rects_05.size(); i ++) {
-            
-            Rect rect_temporal = rects_05.at(i);
-            String boat = "BOAT N.";
-            putText(image_final, boat + to_string(i+1) , Point(rect_temporal.x,rect_temporal.y-5),FONT_HERSHEY_COMPLEX, 0.8, Scalar(0,0,0), 2, FILLED);
-            rectangle(image_final, rects_05.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
-        }
-    }
-    
-    else if (tot_num_boats_08 > 0) {
-        
-        cout<<"IMAGE 08"<<endl;
-        for (int i = 0; i < rects_08.size(); i ++) {
-            
-            rectangle(image_allRects, rects_08.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
-        }
-        
-        vector<double> probabilties_output(rects_08.size());
-        
-        if (rects_08.size() > 1) {
-
-            temp_rects = rects_08;
-            
-            // rect_08 now contains the seed rectangles
-            groupRectangles(rects_08, 1, 0.8);
-            
-            // Draw seed rectangles
-            for (int i = 0; i < rects_08.size(); i ++) {
+            if (equal == 1) {
                 
-            
-                rectangle(image_seeds, rects_08.at(i), cv::Scalar(0, 255, 0), 3);
-            }
-        
-            for (int index = 0; index < rects_08.size(); index ++) {
+                vector<Rect> output_reect;
+                output_reect.push_back(output_first_rect.at(rect_saved[0]));
+                getMetrics(output_reect, image_final, index_image);
                 
-                probabilties_output.at(index) = static_cast<double>(0);
-                
-            }
-            
-        }
-
-        vector<Rect> output_rect = rect_return(temp_rects, rects_08, probabilities_08, probabilties_output);
-            
-        vector<Rect> output_first_rect = output_rect;
-    
-        groupRectangles(output_rect, 2, 0.53);
-        
-        if (output_rect.size() > 0) {
-    
-            cout<<"debug"<<endl;
-            vector<Rect> output_second_rect = rect_return(output_first_rect, output_rect, probabilities_08, probabilties_output);
-            
-            for (int i = 0; i < output_second_rect.size();i ++) {
-                
-                Rect rect_temporal = output_second_rect.at(i);
+                Rect rect_temporal = output_first_rect.at(rect_saved[0]);
                 String boat = "BOAT N.";
-                putText(image_final, boat+to_string(i+1) , Point(rect_temporal.x,rect_temporal.y-5),FONT_HERSHEY_COMPLEX, 0.8, Scalar(0,0,0), 2, FILLED);
-                rectangle(image_final, output_second_rect.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
+                putText(image_final, boat + to_string(1), Point(rect_temporal.x, rect_temporal.y - 5), FONT_HERSHEY_COMPLEX, 0.8, Scalar(0,0,0), 2, FILLED);
+                rectangle(image_final, output_first_rect.at(rect_saved[0]), Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
+            }
+            
+            else if (equal == 0) {
+                
+                for (int i = 0; i < rect_saved.size(); i ++) {
+                    
+                    Rect rect_temporal = output_first_rect.at(i);
+                    String boat = "BOAT N.";
+                    putText(image_final, boat + to_string(i + 1), Point(rect_temporal.x, rect_temporal.y - 5), FONT_HERSHEY_COMPLEX, 0.8, Scalar(0,0,0), 2, FILLED);
+                    rectangle(image_final, output_first_rect.at(rect_saved[i]), Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
+                }
+            }
+            
+            else if (equal == 2) {
+                
+                getMetrics(output_first_rect, image_final, index_image);
+
+                for (int i = 0; i < output_first_rect.size(); i ++) {
+                    
+                    Rect rect_temporal = output_first_rect.at(i);
+                    String boat = "BOAT N.";
+                    putText(image_final, boat + to_string(i + 1), Point(rect_temporal.x, rect_temporal.y - 5), FONT_HERSHEY_COMPLEX, 0.8, Scalar(0,0,0), 2, FILLED);
+                    rectangle(image_final, output_first_rect.at(i), Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
+                }
             }
         }
         
-        else {
-            
-            for (int i = 0; i < output_first_rect.size(); i ++) {
-                
-                Rect rect_temporal = output_first_rect.at(i);
-                String boat = "BOAT N.";
-                putText(image_final, boat+to_string(i+1) , Point(rect_temporal.x,rect_temporal.y-5),FONT_HERSHEY_COMPLEX, 0.8, Scalar(0,0,0), 2, FILLED);
-                rectangle(image_final, output_first_rect.at(i), cv::Scalar(rand() & 255, rand() & 255, rand() & 255), 3);
-            }
-        }
+        imshow("Detected boats N."+to_string(index_image), image_final);
+        cout<<"Please press a key"<<endl;
+        waitKey(0);
+        destroyAllWindows();
+        
+//            imshow("All rects", image_allRects);
+//            waitKey(0);
+//
+//            imshow("Seeds", image_seeds);
+//            waitKey(0);
     }
-    
-    imshow("All rects", image_allRects);
-    waitKey(0);
-    
-    imshow("Seeds", image_seeds);
-    waitKey(0);
-    
-    imshow("Detected boats", image_final);
-    waitKey(0);
 }
 
 // rect_return
-vector<Rect> Detection::rect_return(vector<Rect> all_rects, vector<Rect> seed_rects, vector<double> input_probabilities, vector<double> &output_probabilities) {
+vector<Rect> Detection::rect_return(vector<Rect> all_rects, vector<Rect> seed_rects, int scaling) {
     
     int distance;
     int change;
     
-   
-    // standard 1.4 (it identify how interesection is needed)
-    int scaling_venice = 2;
-    int scaling_kaggle = 1;
-    
+    // scaling identifies how interesection is needed   
     vector<Rect> output_rect;
     vector<int> tot_x;
     vector<int> tot_y;
     vector<int> tot_height;
     vector<int> tot_width;
-    vector<double> vec_probability;
-    
-    
-    
-
-    cout<<"AAAAA"<<seed_rects.size()<<endl;
     
     for (int k = 0; k < seed_rects.size(); k ++) {
-        
         
         change = 0;
         
@@ -347,12 +409,7 @@ vector<Rect> Detection::rect_return(vector<Rect> all_rects, vector<Rect> seed_re
         int height_current = current_rect.height;
         int width_current = current_rect.width;
         
-        cout<<"BBBBB"<<all_rects.size()<<endl;
-        
         for (int h = 0; h < all_rects.size(); h ++) {
-            
-            //cout<< "PROBABILIT° DI STO CAZZO 000 "<<output_probabilities.at(0)<<endl;
-            //cout << "X_current_all number: " << to_string(h) << endl;
             
             Rect current_all_rect = all_rects.at(h);
             int x_all_current = current_all_rect.x;
@@ -361,61 +418,274 @@ vector<Rect> Detection::rect_return(vector<Rect> all_rects, vector<Rect> seed_re
             int width_all_current = current_all_rect.width;
             
             
-            
-            //if more right
-            if (x_all_current <= x_current+width_current/scaling_kaggle && x_all_current >= x_current && x_all_current+width_all_current>= x_current+width_current){
-                if (y_all_current <= y_current+height_current/scaling_kaggle && y_all_current >= y_current ){
+            // MORE RIGHT
+            if (x_all_current <= x_current+width_current/scaling && x_all_current >= x_current && x_all_current+width_all_current>= x_current+width_current) {
+                
+                if (y_all_current <= y_current+height_current/scaling && y_all_current >= y_current) {
                     
                     //y_all_current+height_all_current>y_current+height_current
                     
                     height_current = height_current + y_current;
                     width_current = width_current + (x_all_current+width_all_current-x_current-width_current);
                     height_current = height_current + (y_all_current+height_all_current-y_current-height_current);
-                    //output_probabilities.at(k) = output_probabilities.at(k) + input_probabilities.at(h);
-                    //cout<< "PROBABILIT° DI STO CAZZO 1 "<<output_probabilities.at(k)<<endl;
-                    //cout<< "PROBABILIT° DI STO CAZZO 2 "<<input_probabilities.at(h)<<endl;
-                    change++;
+                    change ++;
                 }
-                if (y_all_current+height_all_current/scaling_kaggle>=y_current && y_all_current<=y_current){
+                
+                else if (y_all_current+height_all_current/scaling>=y_current && y_all_current<=y_current) {
                     
                     width_current = width_current + (x_all_current+width_all_current-x_current-width_current);
                     y_current = y_all_current;
-                    //output_probabilities.at(k) = output_probabilities.at(k) + input_probabilities.at(h);
-                    change++;
+                    change ++;
                 }
                     
             }
-            //MORE LEFT
-            else if (x_all_current+width_all_current/scaling_kaggle>=x_current && x_all_current<=x_current){
-                //More down
-                if (y_all_current <= y_current+height_current/scaling_kaggle && y_all_current >= y_current){
+            
+            // MORE LEFT
+            else if (x_all_current+width_all_current/scaling>=x_current && x_all_current<=x_current) {
+                
+                // MORE DOWN
+                if (y_all_current <= y_current+height_current/scaling && y_all_current >= y_current) {
                     
                     //y_all_current+height_all_current>y_current+height_current
                     
                     width_current = width_current + x_current-x_all_current;
                     x_current = x_all_current;
                     height_current = y_all_current+height_all_current-y_current;
-                    //output_probabilities.at(k) = output_probabilities.at(k) + input_probabilities.at(h);
-                    change++;
+                    change ++;
                     }
-                //More up
-                if (y_all_current+height_all_current/scaling_kaggle>=y_current && y_all_current<=y_current){
+                
+                // MORE UP
+                else if (y_all_current+height_all_current/scaling>=y_current && y_all_current<=y_current) {
+                    
                     height_current = y_current-y_all_current+height_current;
                     y_current = y_all_current;
                     width_current = x_current-x_all_current + width_current;
                     x_current = x_all_current;
-                    //output_probabilities.at(k) = output_probabilities.at(k) + input_probabilities.at(h);
-                    change++;
+                    change ++;
                 }
             }
-            //output_probabilities.at(k) = output_probabilities.at(k)/change;
-            //cout << "PROBABILITA' FINALE " << output_probabilities.at(k) <<endl;
         }
-        //cout << "DIMENSIONE PROBABILITY " <<output_probabilities.size() << endl;
+        
         Rect alone_output_rect = Rect(x_current, y_current, width_current, height_current);
         output_rect.push_back(alone_output_rect);
     }
+
     return output_rect;
+}
+
+// getMetrics
+void Detection::getMetrics(vector<Rect> predicted_rects, Mat image_predicted, int index) {
+    
+    int length_file = test_images.size();
+    vector<vector<Rect>> ground_truth;
+    vector<Rect> image_0;
+    vector<Rect> image_1;
+    vector<Rect> image_2;
+    vector<Rect> image_3;
+    vector<Rect> image_4;
+    vector<Rect> image_5;
+    vector<Rect> image_6;
+    vector<Rect> image_7;
+    vector<Rect> image_8;
+    vector<Rect> image_9;
+    vector<Rect> image_10;
+    vector<Rect> image_11;
+    
+    if (length_file == 10) {
+        
+        image_0.push_back(Rect(280,145,810,600));
+        image_0.push_back(Rect(400,620,280,170));
+        image_0.push_back(Rect(1100,650,130,120));
+        
+        image_1.push_back(Rect(720,420,120,150));
+        
+        image_2.push_back(Rect(720,220,250,290));
+        
+        image_3.push_back(Rect(310,430,640,250));
+        
+        image_4.push_back(Rect(780,620,110,110));
+        
+        image_5.push_back(Rect(80,70,1000,370));
+        
+        image_6.push_back(Rect(220,410,280,140));
+        image_6.push_back(Rect(780,400,300,130));
+        
+        image_7.push_back(Rect(230,300,180,100));
+        image_7.push_back(Rect(560,300,180,100));
+        image_7.push_back(Rect(910,300,150,80));
+        
+        image_8.push_back(Rect(560,440,370,300));
+        
+        image_9.push_back(Rect(295,375,430,183));
+
+        ground_truth.push_back(image_0);
+        ground_truth.push_back(image_1);
+        ground_truth.push_back(image_2);
+        ground_truth.push_back(image_3);
+        ground_truth.push_back(image_4);
+        ground_truth.push_back(image_5);
+        ground_truth.push_back(image_6);
+        ground_truth.push_back(image_7);
+        ground_truth.push_back(image_8);
+        ground_truth.push_back(image_9);
+    }
+    
+    else if (length_file == 12) {
+        
+        image_0.push_back(Rect(950,100,100,150));
+        image_0.push_back(Rect(10,280,260,160));
+        image_0.push_back(Rect(150,460,380,300));
+        
+        image_1.push_back(Rect(500,280,130,100));
+        image_1.push_back(Rect(640,80,150,110));
+        image_1.push_back(Rect(310,290,140,140));
+        image_1.push_back(Rect(460,1,34,25));
+        
+        image_2.push_back(Rect(300,300,150,130));
+        image_2.push_back(Rect(750,120,140,100));
+        
+        image_3.push_back(Rect(950,200,190,330));
+        image_3.push_back(Rect(600,580,290,300));
+        
+        image_4.push_back(Rect(950,100,180,100));
+        image_4.push_back(Rect(500,700,450,200));
+        image_4.push_back(Rect(1,700,400,220));
+        image_4.push_back(Rect(90,250,200,100));
+        image_4.push_back(Rect(400,250,450,150));
+        
+        image_5.push_back(Rect(870,80,100,100));
+        image_5.push_back(Rect(300,120,320,100));
+        image_5.push_back(Rect(100,750,600,200));
+        image_5.push_back(Rect(300,570,500,100));
+        image_5.push_back(Rect(380,500,400,110));
+        image_5.push_back(Rect(430,420,400,100));
+        image_5.push_back(Rect(470,400,350,80));
+        image_5.push_back(Rect(950,150,150,80));
+        image_5.push_back(Rect(500,80,100,50));
+        
+        image_6.push_back(Rect(100,500,200,450));
+        image_6.push_back(Rect(500,500,200,450));
+        image_6.push_back(Rect(250,100,450,150));
+        image_6.push_back(Rect(800,450,250,400));
+        image_6.push_back(Rect(980,450,220,330));
+        
+        image_7.push_back(Rect(700,320,200,150));
+        image_7.push_back(Rect(850,500,250,100));
+        image_7.push_back(Rect(950,400,180,100));
+        image_7.push_back(Rect(1000,300,190,100));
+
+        image_8.push_back(Rect(650,550,200,300));
+        image_8.push_back(Rect(250,350,220,150));
+        image_8.push_back(Rect(50,350,150,80));
+        image_8.push_back(Rect(30,300,260,80));
+        image_8.push_back(Rect(820,100,190,120));
+        
+        image_9.push_back(Rect(1,800,250,100));
+        image_9.push_back(Rect(170,320,750,200));
+        image_9.push_back(Rect(530,730,180,250));
+        image_9.push_back(Rect(620,570,240,360));
+        image_9.push_back(Rect(750,550,250,350));
+        
+        image_10.push_back(Rect(630,700,450,150));
+        image_10.push_back(Rect(1,720,400,200));
+        image_10.push_back(Rect(1,630,330,150));
+        image_10.push_back(Rect(300,230,600,170));
+        image_10.push_back(Rect(980,130,100,80));
+        image_10.push_back(Rect(960,100,200,100));
+        
+        image_11.push_back(Rect(230,580,450,150));
+        image_11.push_back(Rect(850,520,350,150));
+        image_11.push_back(Rect(580,400,300,100));
+
+        ground_truth.push_back(image_0);
+        ground_truth.push_back(image_1);
+        ground_truth.push_back(image_2);
+        ground_truth.push_back(image_3);
+        ground_truth.push_back(image_4);
+        ground_truth.push_back(image_5);
+        ground_truth.push_back(image_6);
+        ground_truth.push_back(image_7);
+        ground_truth.push_back(image_8);
+        ground_truth.push_back(image_9);
+        ground_truth.push_back(image_10);
+        ground_truth.push_back(image_11);
+    }
+    
+    
+    
+    vector<Rect> current_image = ground_truth.at(index);
+    
+    int size_int = min(current_image.size(), predicted_rects.size());
+    
+    for (int i = 0; i < current_image.size(); i++) {
+        
+        //ground_Truth.push_back(current_image.at(i));
+        rectangle(image_predicted, current_image.at(i), Scalar(255,255,255), 3);
+    }
+    
+    // TRUE POSITIVES
+    vector<int> true_pos;
+    
+    cout << "METRICS OF IMAGE "<<to_string(index)<<endl;
+    
+    for (int j = 0; j < current_image.size(); j++) {
+        
+        for (int i = 0; i < predicted_rects.size(); i++){
+            
+            // EVALUATION OF THE METRICS IoU
+            int x_truth = current_image.at(j).x;
+            int y_truth = current_image.at(j).y;
+            int width_truth = current_image.at(j).width;
+            int height_truth = current_image.at(j).height;
+            double area_truth = width_truth * height_truth;
+            
+            int x_pred = predicted_rects.at(i).x;
+            int y_pred = predicted_rects.at(i).y;
+            int width_pred = predicted_rects.at(i).width;
+            int height_pred = predicted_rects.at(i).height;
+            double area_pred = width_pred * height_pred;
+            
+            int x_inter = max(x_pred, x_truth);
+            int y_inter = max(y_pred, y_truth);
+            //cout << "Y inter "<< y_inter << endl;
+            int height_inter = min(y_pred + height_pred, y_truth + height_truth) - y_inter;
+            int width_inter = min(x_pred + width_pred, x_truth + width_truth) - x_inter;
+            
+            // Intersection
+            double area_intersected = height_inter * width_inter;
+    
+            // Union
+            double area_union = area_pred + area_truth - area_intersected;
+            
+            // IoU metrics
+            double IoU_metrics = area_intersected/area_union;
+            
+            if (IoU_metrics > 0.09 && height_inter > 0 && width_inter > 0) {
+                
+                cout<<"BOAT N." << to_string(i+1) <<": " << IoU_metrics << endl;
+                true_pos.push_back(i+1);
+            }
+            
+        }
+    }
+    
+    // FALSE POSITIVES
+    vector<int> false_pos;
+    vector<int>::iterator it;
+    
+    for (int i = 0; i < predicted_rects.size(); i++){
+        
+        it = find(true_pos.begin(), true_pos.end(), i+1);
+        if (it == true_pos.end()) {
+
+            cout << "The rectangle N. "<< i+1<< " is a false positive"<< endl;
+        }
+    }
+    
+    for (int k = 0; k < false_pos.size(); k ++) {
+        
+        cout<< "The rectangle N. " << false_pos.at(k) << " is a false positive" << endl;
+    }
 }
 
 
@@ -429,7 +699,7 @@ Segmentation::Segmentation(String pattern, int fl) : Base(pattern, fl) {
 
 // METHODS
 // segmentation
-vector<Mat> Segmentation::segmentation() {
+vector<Mat> Segmentation::segmentation(String ground_truth_segmentation_path) {
         
     vector<Mat> segmented_images;
     
@@ -438,6 +708,8 @@ vector<Mat> Segmentation::segmentation() {
         
         for (int i = 0; i < test_images.size(); i ++) {
             
+            cout<<endl<<"--------------"<<endl;
+            cout<<"Sea segmentation on image N. "<<to_string(i)<<"..."<<endl;
             Mat image_test = test_images.at(i).clone();
             if (i != 9) {
                 
@@ -532,8 +804,7 @@ vector<Mat> Segmentation::segmentation() {
                 Mat original_segmentated;
                 hconcat(image_test, dst_erode_dilate, original_segmentated);
                 
-                imshow("Segmentation img n. " + to_string(i), original_segmentated);
-                waitKey(0);
+                imshow("Sea segmentation on image N. " + to_string(i), original_segmentated);
                 
                 cvtColor(dst_erode_dilate, dst_erode_dilate, COLOR_BGR2GRAY);
                 
@@ -541,6 +812,10 @@ vector<Mat> Segmentation::segmentation() {
                 swap_colors(dst_erode_dilate);
                 
                 segmented_images.push_back(dst_erode_dilate);
+                double pixel_accuracy = getMetrics(ground_truth_segmentation_path, dst_erode_dilate, i);
+                cout<<"METRIC OF IMAGE "<<to_string(i)<<": "<<to_string(pixel_accuracy)<<endl;
+                cout<<"Pleas press a key"<<endl;
+                waitKey(0);
             }
             
             // image.at(9) KAGGLE: OTSU
@@ -565,13 +840,17 @@ vector<Mat> Segmentation::segmentation() {
                 
                 // Show segmentation result
                 Mat show_img;
+                
                 cvtColor(gray_smoothed_otsu, show_img, COLOR_GRAY2BGR);
                 Mat original_segmentated;
                 hconcat(image_test, show_img, original_segmentated);
                 imshow("Segmentation img n. " + to_string(i), original_segmentated);
-                waitKey(0);
                 
                 segmented_images.push_back(gray_smoothed_otsu);
+                double pixel_accuracy = getMetrics(ground_truth_segmentation_path, gray_smoothed_otsu, i);
+                cout<<"METRIC OF IMAGE "<<to_string(i)<<": "<<to_string(pixel_accuracy)<<endl;
+                cout<<"Pleas press a key"<<endl;
+                waitKey(0);
             }
         }
     }
@@ -579,125 +858,93 @@ vector<Mat> Segmentation::segmentation() {
     // VENICE DATASET
     else {
         
+        vector<Mat> data;
         for (int i = 0; i < test_images.size(); i ++) {
             
-            Mat image_test = test_images.at(i).clone();
-            // Convert image to gray scale
-            //cvtColor(image_test, image_test, COLOR_BGR2GRAY);
+            cout<<endl<<"--------------"<<endl;
+            cout<<"Sea segmentation on image N. "<<to_string(i)<<"..."<<endl;
+            vector<Mat> planes;
+            Mat image_equal;
+            Mat image_hsv;
+            vector<Mat> equalized_channel;
+            vector<Mat> equalized_images;
+            Mat gray_image;
+            Mat image_segmented;
+            Mat show_image;
             
-            // Histogram equalization
-            //equalizeHist(image_test, image_test);
+            cvtColor(test_images.at(i), image_hsv, COLOR_BGR2HSV);
             
-            // Smooth image
-            GaussianBlur(image_test, image_test, Size(11,11), 0);
+            split(image_hsv, planes);
             
-            // Show blurred image
-            imshow("Gray scale smoothed image", image_test);
-            waitKey(0);
-            
-            // EDGE SEGMENTATION
-            // CANNY EDGE
-            // Find edges
-            int threshold1_Canny = 90;
-            int count_th_Canny = 1000;
-            int threshold2_Canny = 155;
-            int aperture_size_Canny = 3;
-            Canny_edge canny(image_test, threshold1_Canny, threshold2_Canny, aperture_size_Canny);
-            canny.doAlgorithm();
-            
-            cout<<"Threshold 1: " + to_string(canny.getThreshold1())<<endl;
-            cout<<"Threshold 2: " + to_string(canny.getThreshold2())<<endl;
-            namedWindow("Canny output", WINDOW_AUTOSIZE);
-            createTrackbar("Threshold 2", "Canny output", &threshold2_Canny, count_th_Canny);
-            createTrackbar("Threshold 1", "Canny output", &threshold1_Canny, count_th_Canny);
-            imshow("Canny output", canny.getResult());
-            createTrackbar("Threshold 1", "Canny output", &threshold1_Canny, count_th_Canny, canny.onCannyThreshold_1,static_cast<void*>(&canny));
-            createTrackbar("Threshold 2", "Canny output", &threshold2_Canny, count_th_Canny, canny.onCannyThreshold_2,static_cast<void*>(&canny));
-            waitKey(0);
-            
-            // Draw contours
-            vector<vector<Point>> contours;
-            vector<Vec4i> hierarchy;
-            findContours(canny.getResult(), contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+            //equalizeHist(planes[0], planes[0]);         // Blue channel equalized
+            //equalizeHist(planes[1], planes[1]);        // Green channel equalized
+            equalizeHist(planes[2], planes[2]);
+            cout<< "DEBUG" <<endl;
+            merge(planes,image_equal);
+            cvtColor(image_equal, image_equal, COLOR_HSV2BGR);
+            GaussianBlur(image_equal, image_equal, Size(5,5), 0);
+            equalized_images.push_back(image_equal);
 
-            vector<vector<Point>> contours_poly(contours.size());
-            vector<Rect> boundRect(contours.size());
-            vector<Point2f>centers( contours.size() );
-            vector<float>radius( contours.size() );
-            for( size_t i = 0; i < contours.size(); i++ )
-            {
-                approxPolyDP( contours[i], contours_poly[i], 3, true );
-                boundRect[i] = boundingRect( contours_poly[i] );
-                minEnclosingCircle( contours_poly[i], centers[i], radius[i] );
-            }
             
-            Mat drawing = Mat::zeros( canny.getResult().size(), CV_8UC3 );
-            for( size_t i = 0; i< contours.size(); i++ )
-            {
-                Scalar color = Scalar(255,0,0);
-                drawContours( drawing, contours_poly, (int)i, color );
-                rectangle( drawing, boundRect[i].tl(), boundRect[i].br(), color, 2 );
-                //circle( drawing, centers[i], (int)radius[i], color, 2 );
-            }
-            cout<<"NUMBER OF BOXES: "<<boundRect.size()<<endl;
-            imshow("All rects", drawing);
+            // OTSU
+            cvtColor(image_equal, gray_image, COLOR_BGR2GRAY);
+            threshold(gray_image, image_segmented, 0, 255, THRESH_OTSU);
+            cvtColor(image_segmented, show_image, COLOR_GRAY2BGR);
+            
+            imshow("not eroded", image_segmented);
+            Mat kernel = getStructuringElement(0, Size(7,7));
+            //dilate(image_segmented, image_segmented, kernel, Point(-1,-1), 5);
+            erode(image_segmented, image_segmented, kernel, Point(-1,-1), 7);
+            dilate(image_segmented, image_segmented, kernel, Point(-1,-1), 2);
+            imshow("eroded", image_segmented);
+            imshow("ORIginal", image_equal);
             waitKey(0);
-            // Merged
-            int perimeter = 200;
-            vector<Rect> boundRect_new;
-            for (int i=0; i<boundRect.size(); i++) {
+            
+            
+            //KMEANS
+            
+            
+            // KMEANS SEGMENTATION BASED ON COLOR
+            // Covert the image into CV_32F
+//            Mat data;
+//            image_equal.convertTo(data, CV_32F);
+//
+//
+//
+//            // Reshape data
+//            data = data.reshape(1, data.total());
+//
+//            // Outputs of Kmeans
+//            Mat labels;
+//            Mat centers;
+//            kmeans(data, 2, labels, TermCriteria(TermCriteria::EPS, 10, 1.0), 3, KMEANS_RANDOM_CENTERS, centers);
+//
+//            // color_segmented_img has size (rows*cols, 1), channels = 3
+//            Mat color_segmented_img = data.reshape(3,data.rows);
+//
+//            for (int j = 0; j < labels.rows; j ++) {
+//
+//                int center_id = labels.at<int>(j);
+//                color_segmented_img.at<Vec3f>(j) = centers.at<Vec3f>(center_id);
+//            }
+//
+//            // color_segmented_img has size (rows, cols), channels = 3
+//            color_segmented_img = color_segmented_img.reshape(3, test_images.at(i).rows);
+//
+//            // Convert color_segmented_img to CV_8UC3
+//            color_segmented_img.convertTo(color_segmented_img, CV_8UC3);
+//
+//            imshow("ciao", color_segmented_img);
+//            waitKey(0);
 
-                int perimeter_actual = 2*boundRect.at(i).height + 2*boundRect.at(i).width;
-                if (perimeter_actual >= perimeter) {
-                    
-                    boundRect_new.push_back(boundRect.at(i));
-                }
-            }
-            
-//               groupRectangles(boundRect, 1, 0.1);
-            Mat merged_drawing = Mat::zeros( canny.getResult().size(), CV_8UC3 );
-            
-            String path_CNN = "/Users/gioel/Documents/Control\ System\ Engineering/Computer\ Vision/Final\ Project/Model/model_cnn.pb";
-            dnn::Net net = dnn::readNetFromTensorflow(path_CNN);
-            vector<Rect> aa;
-            for ( size_t i = 0; i< boundRect_new.size(); i++ )
-            {
-                Scalar color = Scalar(255,0,0);
-                rectangle( merged_drawing, boundRect_new[i], color, 2 );
-                //circle( drawing, centers[i], (int)radius[i], color, 2 );
-             
-                Mat window = image_test(boundRect_new.at(i));
-                //cvtColor(window, window, COLOR_GRAY2BGR);
-                resize(window, window, Size(300,300));
-                Mat img_toNet_blob = cv::dnn::blobFromImage(window);
-                net.setInput(img_toNet_blob);
-                Mat prob;
-                net.forward(prob);
-                
-                if (prob.at<float>(0) >= 0.5) {
-                    
-                    aa.push_back(boundRect_new.at(i));
-                }
-            }
-            cout<<"SIZE CNN "<<aa.size()<<endl;
-            imshow("Important rects", merged_drawing);
-            waitKey(0);
-            
-            Mat imm = image_test.clone();
-            for( size_t i = 0; i< aa.size(); i++ )
-            {
-                Scalar color = Scalar(255,0,0);
-                rectangle( imm, aa[i], color, 2 );
-            }
-            imshow("After CNN rects", imm);
-            waitKey(0);
         }
     }
+    
     return segmented_images;
 }
 
 // pixel_accuracy
-vector<double> Segmentation::pixel_accuracy(String ground_truth_segmentation_path, vector<Mat> segmentated_images) {
+double Segmentation::getMetrics(String ground_truth_segmentation_path, Mat segmentated_image, int index) {
     
     // Kaggle
     if (flag == 1) {
@@ -720,29 +967,24 @@ vector<double> Segmentation::pixel_accuracy(String ground_truth_segmentation_pat
     
     vector<double> accuracy_images;
     
-    cout<<"GT: "<<Kaggle_gt.size()<<endl;
-    cout<<"SEGMENT: "<<segmentated_images.size()<<endl;
     // Evaluate pixel acccuracy for any image in segmented_images
-    for (int i = 0; i < segmentated_images.size(); i ++) {
+    //for (int i = 0; i < segmentated_images.size(); i ++) {
         
-        cvtColor(segmentated_images.at(i), segmentated_images.at(i), COLOR_GRAY2BGR);
+        cvtColor(segmentated_image, segmentated_image, COLOR_GRAY2BGR);
         double intersection_pixels = 0;
         double union_pixels = 0;
         
-        cout<<"ROWS: "<<segmentated_images.at(i).rows<<"   "<<Kaggle_gt.at(i).rows<<endl;
-        cout<<"COLS: "<<segmentated_images.at(i).cols<<"   "<<Kaggle_gt.at(i).cols<<endl;
-        
-        for (int r = 0; r < Kaggle_gt.at(i).rows; r ++) {
+        for (int r = 0; r < Kaggle_gt.at(index).rows; r ++) {
             
-            for (int c = 0; c < Kaggle_gt.at(i).cols; c ++) {
+            for (int c = 0; c < Kaggle_gt.at(index).cols; c ++) {
                 
-                if (segmentated_images.at(i).at<Vec3b>(r,c) == Kaggle_gt.at(i).at<Vec3b>(r,c) && segmentated_images.at(i).at<Vec3b>(r,c) == Vec3b(255, 255, 255)) {
+                if (segmentated_image.at<Vec3b>(r,c) == Kaggle_gt.at(index).at<Vec3b>(r,c) && segmentated_image.at<Vec3b>(r,c) == Vec3b(255, 255, 255)) {
                     
                     intersection_pixels ++;
                     union_pixels ++;
                 }
                 
-                else if (segmentated_images.at(i).at<Vec3b>(r,c) == Vec3b(255, 255, 255) || Kaggle_gt.at(i).at<Vec3b>(r,c) == Vec3b(255, 255, 255)) {
+                else if (segmentated_image.at<Vec3b>(r,c) == Vec3b(255, 255, 255) || Kaggle_gt.at(index).at<Vec3b>(r,c) == Vec3b(255, 255, 255)) {
                     
                     union_pixels ++;
                 }
@@ -750,11 +992,12 @@ vector<double> Segmentation::pixel_accuracy(String ground_truth_segmentation_pat
         }
         
         // Evaluate metric
-        double acc = intersection_pixels / union_pixels;
-        accuracy_images.push_back(acc);
-    }
+        double pixel_accuracy = intersection_pixels / union_pixels;
+        //accuracy_images.push_back(acc);
     
-    return accuracy_images;
+//}
+    //return accuracy_images;
+    return pixel_accuracy;
 }
 
 // swap_colors
@@ -848,7 +1091,7 @@ void Segmentation::click(Mat image) {
     }
     imshow("Ground truth", mask);
     waitKey(0);
-    imwrite("/Users/gioel/Documents/Control\ System\ Engineering/Computer\ Vision/Final\ Project/data/Ground_truth/Segmentation/Venice/img_11.jpg", mask);
+    //imwrite("/Users/gioel/Documents/Control\ System\ Engineering/Computer\ Vision/Final\ Project/data/Ground_truth/Segmentation/Venice/img_11.jpg", mask);
 }
 
 // onMouse
@@ -896,80 +1139,6 @@ void Segmentation::onMouse(int event, int x, int y, int f, void* userdata) {
     
     imshow("IMAGE", image);
     waitKey(1);
-}
-
-
-//
-// CANNY_EDGE CLASS
-//
-// CONSTRUCTOR
-Canny_edge::Canny_edge(cv::Mat input_img, int th1, int th2, int apertureSize) {
-    
-    if (apertureSize % 2 == 0)
-        apertureSize++;
-    input_image_canny = input_img;
-    aperture_size_Canny = apertureSize;
-    threshold1_Canny = th1;
-    threshold2_Canny = th2;
-}
-
-// METHODS
-// doAlgorithm
-void Canny_edge::doAlgorithm() {
-    
-    cv::Canny(input_image_canny, result_image_canny, threshold1_Canny, threshold2_Canny, aperture_size_Canny);
-}
-
-// setThreshold1
-void Canny_edge::setThreshold1(int th1) {
-    
-    threshold1_Canny = th1;
-}
-
-// setThreshold2
-void Canny_edge::setThreshold2(int th2) {
-    
-    threshold2_Canny = th2;
-}
-
-// getThreshold1
-int Canny_edge::getThreshold1() {
-    
-    return threshold1_Canny;
-}
-
-// getThreshold2
-int Canny_edge::getThreshold2() {
-    
-    return threshold2_Canny;
-}
-
-// getResult
-cv::Mat Canny_edge::getResult() {
-    
-    return result_image_canny;
-}
-
-// onCannyThreshold_1
-void Canny_edge::onCannyThreshold_1(int pos, void *userdata) {
-
-    Canny_edge* canny = static_cast<Canny_edge*>(userdata);
-    canny->setThreshold1(pos);
-    cout<<"Threshold 1: " + to_string(canny->getThreshold1())<<endl;
-    cout<<"Threshold 2: " + to_string(canny->getThreshold2())<<endl;
-    canny->doAlgorithm();
-    imshow("Canny output", canny->getResult());
-}
-
-// onCannyThreshold_2
-void Canny_edge::onCannyThreshold_2(int pos, void *userdata) {
-
-    Canny_edge* canny = static_cast<Canny_edge*>(userdata);
-    canny->setThreshold2(pos);
-    cout<<"Threshold 1: " + to_string(canny->getThreshold1())<<endl;
-    cout<<"Threshold 2: " + to_string(canny->getThreshold2())<<endl;
-    canny->doAlgorithm();
-    imshow("Canny output", canny->getResult());
 }
 
 
@@ -1113,3 +1282,107 @@ void HoughLine::onHoughLineThetaden(int pos, void *userdata) {
     hough_l->doAlgorithm();
     imshow("HoughLine output", hough_l->getResult());
 }
+
+
+
+//using namespace std;
+//using namespace cv;
+//
+//int main(int argc, const char * argv[]) {
+//
+//    String pattern_venice = "/Users/davideallegro/Documents/Università/Laurea magistrale/Computer Vision/Project/Test_file/venice_dataset";
+//    String pattern_kaggle = "/Users/davideallegro/Documents/Università/Laurea magistrale/Computer Vision/Project/Test_file/Kaggle_ships";
+//
+//
+//    // CHANGE HERE THE PATTERN
+//    String pattern = pattern_venice;
+//
+//
+//    int flag;
+//    int min_rect;
+//    double eps;
+//
+//    int stepSize;
+//    int windowSize_rows;
+//    int windowSize_cols;
+//
+//    int stepSize_Kaggle = 40;
+//    int windowSize_rows_Kaggle = 115;
+//    int windowSize_cols_Kaggle = 115;
+//
+//    int stepSize_Venice = 30;
+//    int windowSize_rows_Venice = 150;
+//    int windowSize_cols_Venice = 150;
+//
+//    if (pattern == pattern_kaggle){
+//        flag = 1;
+//        min_rect = 1;
+//        eps = 0.8;
+//        stepSize = stepSize_Kaggle;
+//        windowSize_rows = windowSize_rows_Kaggle;
+//        windowSize_cols = windowSize_cols_Kaggle;
+//    }
+//    if (pattern == pattern_venice){
+//
+//        flag = 0;
+//        min_rect = 2;
+//        eps = 0.6;
+//        stepSize = stepSize_Venice;
+//        windowSize_rows = windowSize_rows_Venice;
+//        windowSize_cols = windowSize_cols_Venice;
+//    }
+//    Detection boat(pattern, flag);
+//
+//    String model_CNN_pb = "/Users/davideallegro/Documents/Università/Laurea magistrale/Computer Vision/Project/cnn_net/model_CNN_try.pb";
+//
+//    vector<Mat> image_tested = boat.test_images;
+//
+//    vector<pair<Point, Point>> lines;
+//
+//
+//
+//    //EQUALIZATION
+//    vector<Mat> image_equalized;
+//    for (int i = 0; i<image_tested.size(); i++){
+//
+//        Mat output_level_0, output_level_1, output_level_2;
+//        vector<Mat> planes;
+//        Mat image_equal;
+//        Mat image_hsv;
+//        vector<Mat> equalized_channel;
+//
+//        cvtColor(image_tested.at(i), image_hsv, COLOR_BGR2HSV);
+//
+//        split(image_hsv, planes);
+//        //equalizeHist(planes[0], planes[0]);         // Blue channel equalized
+//        //equalizeHist(planes[1], planes[1]);        // Green channel equalized
+//        equalizeHist(planes[2], planes[2]);
+//
+//        //cvtColor(image_tested.at(i), image_tested.at(i), COLOR_HSV2BGR);
+//
+//        merge(planes,image_equal);
+//        cvtColor(image_equal, image_equal, COLOR_HSV2BGR);
+//        image_equalized.push_back(image_equal);
+//    }
+//
+//    //SMOOTHING
+//    vector<Mat> image_smoothed;
+//
+//    for (int i = 0; i<image_tested.size(); i++){
+//
+//        Mat image_smooth;
+//        GaussianBlur(image_equalized.at(i), image_smooth, Size(3,3), 0);
+//        image_smoothed.push_back(image_smooth);
+//    }
+//
+//
+//boat.sliding_window(image_smoothed, stepSize, windowSize_rows, windowSize_cols, model_CNN_pb, min_rect, eps);
+//
+////    vector<Mat> segmented_images;
+////    Segmentation segmentation(pattern_venice, 0);
+////    segmented_images = segmentation.segmentation();
+////    String ground_truth_segmentation_path = "/Users/davideallegro/Documents/Università/Laurea magistrale/Computer Vision/Project/Ground_truth/Segmentation/";
+////    vector<double> pixel_accuracy;
+//
+//    return 0;
+//}
